@@ -92,7 +92,7 @@ sub search_line {
 	else {
 		$statement_count += do_searches($line);
 	}
-	###print "Results: @do_results" if (@do_results);
+	print "Results: @do_results" if @do_results && $debug;
 	#Prepend Line # to each Search Result
 	if (@do_results) {
 		my $line_no = join '', $line =~ ( /^([0-9]*)\s/ ); #Line Number at Beginning of Line	
@@ -111,14 +111,16 @@ sub search_line {
 sub do_searches {
 	my $text = $_[0];
 	my $statement_count;
-	###print "Searching text: $text\n"; 
-	#Get Line Number from Beginning of Line	
+	print "Searching text: $text\n" if $debug; 
+	#Extract String Assignments from Line
 	my @strings = $text =~ ( /LET\s+(\w+\$\s*=\s*[^;,]*)/gi );
 	push @strings, $text =~ ( /,\s*(\w+\$\s*=\s*[^;,]*)/gi );
 	#Search for statement(s)
-	my @statements = $text =~ ( /[0-9]+\s+($verb\s[^;]*)/gi );
-	push @statements, $text =~ ( /[:;]\s+($verb\s[^;]*)/gi );
-	###print "statements: @statements\n" if (@statements);
+	my @statements = $text =~ ( /[0-9]+\s+($verb\s+\w[^;]*)/gi );
+	push @statements, $text =~ ( /[:;]\s+($verb\s+\w[^;]*)/gi );
+	push @statements, $text =~ ( /THEN\s+($verb\s+\w[^;]*)/gi );
+	push @statements, $text =~ ( /ELSE\s+($verb\s+\w[^;]*)/gi );
+	print "statements: @statements\n" if @statements && $debug;
 	$statement_count = scalar @statements;
 	push @do_results, @strings, @statements;
 	return $statement_count;
@@ -128,13 +130,13 @@ sub do_searches {
 #Uses: $file_name, @match_lines, %prog_lines
 #            hash table containing matching program lines
 sub build_output {
-	print "Building Output for file $filename\n";
+	print "Building Output for file $filename\n" if $debug;
 	undef %out_lines; #key = line#, data = program line
 	undef %var_lines; #key = variable name, data = line#
 	#Build Output Has Array
 	foreach (@match_lines) {
 		(my $line_no, my $line_text) = $_ =~ /^([0-9]*)\s(.*)/;
-		###print "Processing $line_no $line_text\n";
+		print "Processing $line_no $line_text\n" if $debug;
 		if ( $line_text =~ /^$verb/ ) {
 			#Process String Variables in statement argument
 			get_statement_vars($line_text);
