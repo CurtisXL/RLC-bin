@@ -113,7 +113,8 @@ sub do_replaces {
 	$text = $_[0];
 	#do_rl_open();	#Replace OPEN () with RL.Open()
 	#do_rl_path();	#Insert RL.Path()
-	do_rl_path_run();	#Insert RL.Path() in RUN statements
+	do_rl_path_call();	#Insert RL.Path() in CALL statements
+	#do_rl_path_run();	#Insert RL.Path() in RUN statements
 	#do_rl_rename();	#Replcase RENAME with RL.Rename()
 	return $text;
 }
@@ -150,20 +151,21 @@ sub do_rl_path {
 	$unreplaced +- $text =~ /[:;]\s*($file_verbs)\s/g;
 }
 
+#Insert RL.Path in appropriate CALL Statements
+#Updates: $text - text to search and replace
+#		  $replacements - number of replacements made
+sub do_rl_path_call {
+	#Replace  CALL filespec  with line# CALL RL.Path(filespec)
+	$replacements += $text =~  s/\s+(CALL)\s+($absex)/ $1 RL\.Path\($2\)/g;
+}
+
 #Insert RL.Path in appropriate RUN Statements
 #Updates: $text - text to search and replace
 #		  $replacements - number of replacements made
 sub do_rl_path_run {
-	#Replace  line# VERB filespec  with line# VERB RL.Path(filespec)
-	$replacements += $text =~  s/(^[0-9]+)\s+(RUN)\s+($runex)/$1 $2 RL\.Path\($3\)/g;
-	#Replace  : line# VERB filespec,  with  : VERB RL.Path(filespec),
-	#Replace  ; line# VERB filespec,  with  ; VERB RL.Path(filespec),
-	$replacements += $text =~  s/(:|;)\s+(RUN)\s+($runex)/$1 $2 RL\.Path\($3\)/g;
-	#Find Number of unchanged VERB statements
-	$unreplaced +- $text =~ /^[0-9]+\s+($file_verbs)\s/g;
-	$unreplaced +- $text =~ /[:;]\s*($file_verbs)\s/g;
+	#Replace  RUN filespec  with line# RUN RL.Path(filespec)
+	$replacements += $text =~  s/\s+(RUN)\s+($absex)/ $1 RL\.Path\($2\)/g;
 }
-
 
 #Replace RENAME Verb with Call to Static Methoc RL.Rename()
 #Updates: $text - text to search and replace
@@ -211,6 +213,6 @@ sub set_regex_globals {
 	$modex .= '|"[^"]*"\+[^\+]+\+"[^"]*"+\+[^\+]+\+"[^"]*"'; #"string"+expr+"string"+expr+"string"
 	#Regular Expression for filespec after OPEN
 	$filex = '.[^\|][^;\s]*'; #any character + not a pipe + all characters not a semicolon or space 
-	#Regular Expression for filespec after RUN
-	$runex = '"\/[^; ]*'; #Literal String beginning with forward slash plus any non-semicolon
+	#Regular Expression for absolute path filespec
+	$absex = '"\/[^; ]*'; #Literal String beginning with forward slash plus any non-semicolon
 }
