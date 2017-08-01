@@ -5,11 +5,17 @@
 use Getopt::Std;	#Perl GetOpts Package
 
 #Get Command Line Options
-getopts("msvx:", \%opts) || die ;
+getopts("mp:svx:", \%opts) || die ;
 $matched_text = defined $opts{m};
 $string_vars = defined $opts{s};
 $verbs_only = defined $opts{v};
+$program_regex = $opts{p};
 $exclude_regex = $opts{x};
+
+if ($string_vars) {
+	print "-s option not implemented\n";
+	exit;
+}
 
 #Check Command Line Arguments
 if (scalar @ARGV != 1) {
@@ -17,7 +23,8 @@ if (scalar @ARGV != 1) {
 	print "Searches specific directories and ignores contents of REM statements\n";
 	print "Usage: $0 [OPTION] REGEX\n";
 	print "Options: -m  output matched text only\n";
-	print "         -s  include string variable assignments\n";
+	print "         -p REGEX   only programs with line(s) matching regular expression\n";
+	#print "         -s  include string variable assignments\n";
 	print "         -v  search for verbs only\n";
 	print "         -x REGEX   exclude lines matching regular expression\n";
 	exit;
@@ -37,7 +44,6 @@ foreach (@subdirs) {
 print "Total matches against '$regex' ";
 print "excluding '$exclude_regex' " if $exclude_regex;
 print "= $total_matches\n";
-
 
 #Search Directory
 #Parameters: Directory to Search
@@ -63,6 +69,7 @@ sub search_directory {
 #Parameters: Filename of File to Search
 sub search_file {
 	$filename = $_[0];
+	$file_prg_matches = 0; #Number of matches against -p option argument
 	my @results;
 	#print "Searching file '$filename'\n";
 	open my $file, $filename || die "Error opening file '$filename'\n";
@@ -72,6 +79,7 @@ sub search_file {
 		push @results, @line_results;
 	}
 	close $file;
+	return if ($program_regex && !$file_prg_matches); #Output only if -p option was matched
 	if (@results) {
 		print "$filename\n";
 		foreach (@results) { print "\t$_\n"; }
@@ -84,7 +92,8 @@ sub search_file {
 sub search_line {
 	my $line = $_[0];
 	my @results;	#Results of Line Search
-	undef @do_matches;
+	undef @do_matches; #Matches against regular expression
+	undef @prog_matches; #Matches against -p option parameter
 	my $do_results;	#Results of each Call to do_searches
 	#Skip Lines Beginning with REM
 	next if ($line =~ /^[0-9]+\s*REM\s/);
@@ -97,7 +106,7 @@ sub search_line {
 	} else {
 		$do_results = do_searches($line);
 	}
-	###print "Results: @do_results" if (@do_results);
+	print "Results: @do_results" if @do_results && $debug;
 	#Prepend Line # to each Search Result
 	my @line_no = $line =~ /^([0-9]*)\s/ ; #Line Number at Beginning of Line	
 	if ($do_results) {
@@ -116,19 +125,31 @@ sub search_line {
 #Returns: array containing search results
 sub do_searches {
 	my $text = $_[0];
-	my $matches;
+	my $match_count;
 	return 0 if $exclude_regex && $text =~ /$exclude_regex/;
 	if ($verbs_only) {
 		#Search for Expression after a Line Number
-		$matches = my @lno_matches = $text =~  /^[0-9]+\s+($regex)/;
+		$match_count = my @lno_matches = $text =~  /^[0-9]+\s+($regex)/;
 		#Search for Expression after a Colon or Semicolon
-		$matches += my @lbl_matches = $text =~  /[:;]\s+($regex)/g;
+		$match_count += my @lbl_matches = $text =~  /[:;]\s+($regex)/g;
+		#Search for Expression after a THEN
+		$match_count += my @lbl_matches = $text =~  /THEN\s+($regex)/g;
+		#Search for Expression after an ELSE
+		$match_count += my @lbl_matches = $text =~  /ELSE\s+($regex)/g;
 		push @do_matches, @lno_matches, @lbl_matches;
 	} else {
-		$matches = @do_matches = $text =~  /$regex/g;
+		$match_count = @do_matches = $text =~  /$regex/g;
 	}
-	$total_matches += $matches;
-	if ($matches) {
+	$total_matches += $match_count;
+    if ($program_regex) {
+		my $prg_match_count = my @prg_matches = $text =~ /$program_regex/g;
+		if ($prg_match_count) {
+			print "prg_matches: @prg_matches\n" if $debug;
+			push @do_matches, @prg_matches;
+			$file_prg_matches += $prg_match_count;
+		}
+	}
+	if ($match_count) {
 		return $text;
 	} else {
 		return 0;
