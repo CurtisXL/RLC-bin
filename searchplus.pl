@@ -4,13 +4,15 @@
 #Prints to stdout: Lines containing specified verb and lines containing assignments
 #	to string variables used in arguments to those verbs
 
+$ARGC = scalar @ARGV;
+
 #Check Command Line Arguments
-if (scalar @ARGV != 1) {
+if ($ARGC < 1 || $ARGC > 2) {
 	print "RLC Improved Verb Search Utility\n";
 	print "Searches specific directories and ignores contents of REM statements\n";
 	print "Outputs all statetments using the specified verb\n";
 	print "and assignments to strings used in those statements\n";
-	print "Usage: $0 VERB\n";
+	print "Usage: $0 VERB [ARGS]\n";
 	exit;
 }
 
@@ -20,6 +22,7 @@ $rlcdir = 'RLC';	#Base Directory for Source Code Files
 
 #Set Verb to Search For
 $verb = $ARGV[0]; 
+$args = $ARGC > 1 ? $ARGV[1] : '\w';
 
 print "Searching for verb '$verb'\n";
 print "\n";
@@ -116,10 +119,10 @@ sub do_searches {
 	my @strings = $text =~ ( /LET\s+(\w+\$\s*=\s*[^;,]*)/gi );
 	push @strings, $text =~ ( /,\s*(\w+\$\s*=\s*[^;,]*)/gi );
 	#Search for statement(s)
-	my @statements = $text =~ ( /[0-9]+\s+($verb\s+\w[^;]*)/gi );
-	push @statements, $text =~ ( /[:;]\s+($verb\s+\w[^;]*)/gi );
-	push @statements, $text =~ ( /THEN\s+($verb\s+\w[^;]*)/gi );
-	push @statements, $text =~ ( /ELSE\s+($verb\s+\w[^;]*)/gi );
+	my @statements = $text =~ ( /[0-9]+\s+($verb\s+$args[^;]*)/gi );
+	push @statements, $text =~ ( /[:;]\s+($verb\s+$args[^;]*)/gi );
+	push @statements, $text =~ ( /THEN\s+($verb\s+$args[^;]*)/gi );
+	push @statements, $text =~ ( /ELSE\s+($verb\s+$args[^;]*)/gi );
 	print "statements: @statements\n" if @statements && $debug;
 	$statement_count = scalar @statements;
 	push @do_results, @strings, @statements;
