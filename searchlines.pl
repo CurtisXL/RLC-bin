@@ -5,7 +5,8 @@
 use Getopt::Std;	#Perl GetOpts Package
 
 #Get Command Line Options
-getopts("mp:svx:", \%opts) || die ;
+getopts("cmp:svx:", \%opts) || die ;
+$show_counts = defined $opts{c};
 $matched_text = defined $opts{m};
 $string_vars = defined $opts{s};
 $verbs_only = defined $opts{v};
@@ -22,7 +23,8 @@ if (scalar @ARGV != 1) {
 	print "RLC Program Search Utility\n";
 	print "Searches specific directories and ignores contents of REM statements\n";
 	print "Usage: $0 [OPTION] REGEX\n";
-	print "Options: -m  output matched text only\n";
+	print "Options: -c  display additional counts\n";
+	print "         -m  output matched text only\n";
 	print "         -p REGEX   only programs with line(s) matching regular expression\n";
 	#print "         -s  include string variable assignments\n";
 	print "         -v  search for verbs only\n";
@@ -41,6 +43,10 @@ foreach (@subdirs) {
 	$searchdir = "$rlcdir/$_";
 	search_directory($searchdir);
 }
+if ($show_counts) {
+	print "Number of lines searched: $line_count\n";
+	print "Total REM statements found: $rem_count\n*$/n";
+}
 print "Total matches against '$regex' ";
 print "excluding '$exclude_regex' " if $exclude_regex;
 print "= $total_matches\n";
@@ -52,7 +58,7 @@ sub search_directory {
 	#print "Searching directory '$dirname'\n";
 	opendir my $dir, $dirname || die "Error opening directory '$dirname'\n";
 	while ($file = readdir $dir) {
-		next if (index($file, '.')>-1); #Skip Files with Dot in File Name
+		next if (index($file, '.')==0); #Skip File Name beginning with Dot
 		$filespec = "$dirname/$file";
 		if (-d $filespec) {
 			search_directory($filespec);
@@ -75,6 +81,7 @@ sub search_file {
 	open my $file, $filename || die "Error opening file '$filename'\n";
 	while (my $line = readline $file) {
 		$line =~ s/\r*\n*$//; #Strip CR and/or LF from line
+		$line_count += 1;
 		my @line_results = search_line($line);
 		push @results, @line_results;
 	}
@@ -96,12 +103,16 @@ sub search_line {
 	undef @prog_matches; #Matches against -p option parameter
 	my $do_results;	#Results of each Call to do_searches
 	#Skip Lines Beginning with REM
-	next if ($line =~ /^[0-9]+\s*REM\s/);
+	if ($line =~ /^[0-9]+\s*REM\s/i) {
+		$rem_count += 1;
+		return @results;
+	}
 	#Isolate trailing REM from Line
-	if ($line =~ /(.*)(;\s*REM\s+.*$)/) {
+	if ($line =~ /(.*?)([;:]\s*REM\s+.*$)/i) {
 		die "Bad REM split on line $line\n" if ("$1$2" ne $line);
 		my $quotes = $1 =~ tr/\"//;	#Count number of Quotes in Code part of Line
 		die "Odd number of Quotes after REM split on line $line" if ($quotes % 1);
+		$rem_count += 1;
 		$do_results = do_searches($1);
 	} else {
 		$do_results = do_searches($line);
@@ -133,10 +144,10 @@ sub do_searches {
 		#Search for Expression after a Colon or Semicolon
 		$match_count += my @lbl_matches = $text =~  /[:;]\s+($regex)/g;
 		#Search for Expression after a THEN
-		$match_count += my @lbl_matches = $text =~  /THEN\s+($regex)/g;
+		$match_count += my @then_matches = $text =~  /THEN\s+($regex)/g;
 		#Search for Expression after an ELSE
-		$match_count += my @lbl_matches = $text =~  /ELSE\s+($regex)/g;
-		push @do_matches, @lno_matches, @lbl_matches;
+		$match_count += my @else_matches = $text =~  /ELSE\s+($regex)/g;
+		push @do_matches, @lno_matches, @lbl_matches, @then_matches, @else_matches;
 	} else {
 		$match_count = @do_matches = $text =~  /$regex/g;
 	}

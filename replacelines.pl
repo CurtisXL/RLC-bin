@@ -83,9 +83,9 @@ sub search_line {
 	my @results;	#Results of Line Search
 	undef @unreplaced; #Unreplaced Matches
 	#Skip Lines Beginning with REM
-	next if ($line =~ /^[0-9]+\s*REM\s/);
+	next if ($line =~ /^[0-9]+\s*REM\s/i);
 	#Isolate trailing REM from Line
-	if ($line =~ /(.*)(;\s*REM\s+.*$)/) {
+	if ($line =~ /(.*?)([;i]\s*REM\s+.*$)/i) {
 		die "Bad REM split on line $line\n" if ("$1$2" ne $line);
 		my $quotes = $1 =~ tr/\"//;	#Count number of Quotes in Code part of Line
 		die "Odd number of Quotes after REM split on line $line" if ($quotes % 1);
@@ -155,16 +155,20 @@ sub do_rl_path {
 #Updates: $text - text to search and replace
 #		  $replacements - number of replacements made
 sub do_rl_path_call {
-	#Replace  CALL filespec  with line# CALL RL.Path(filespec)
-	$replacements += $text =~  s/\s+(CALL)\s+($absex)/ $1 RL\.Path\($2\)/g;
+	#Replace  CALL "abspath"  with  CALL RL.Path("abspath")
+	$replacements += $text =~  s/\s(CALL)\s+($nop5ex)/ $1 RL\.Path\($2\)/g;
+	#Replace  CALL MCH$+"abspath" with  CALL RL.Path("abspath")
+	$replacements += $text =~  s/\s(CALL)\s+MCH\$\+($callex)/ $1 RL\.Path\($2\)/g;
+	#Find unchanged CALL "abspath" statements
+	push @unreplaced, $text =~  /\s(CALL\s+$callex)/gi;
 }
 
 #Insert RL.Path in appropriate RUN Statements
 #Updates: $text - text to search and replace
 #		  $replacements - number of replacements made
 sub do_rl_path_run {
-	#Replace  RUN filespec  with line# RUN RL.Path(filespec)
-	$replacements += $text =~  s/\s+(RUN)\s+($absex)/ $1 RL\.Path\($2\)/g;
+	#Replace  RUN "abspath"  with  RUN RL.Path("abspath")
+	$replacements += $text =~  s/\s(RUN)\s+($runex)/ $1 RL\.Path\($2\)/g;
 }
 
 #Replace RENAME Verb with Call to Static Methoc RL.Rename()
@@ -213,6 +217,9 @@ sub set_regex_globals {
 	$modex .= '|"[^"]*"\+[^\+]+\+"[^"]*"+\+[^\+]+\+"[^"]*"'; #"string"+expr+"string"+expr+"string"
 	#Regular Expression for filespec after OPEN
 	$filex = '.[^\|][^;\s]*'; #any character + not a pipe + all characters not a semicolon or space 
-	#Regular Expression for absolute path filespec
-	$absex = '"\/[^; ]*'; #Literal String beginning with forward slash plus any non-semicolon
+	#Regular Expression for absolute path filespec after RUN
+	$runex = '"\/[^; ]*'; #Literal String beginning with forward slash plus any non-semicolon
+	#Regular Expression for absolute path filespec after CALL
+	$callex = '"\/.*?"'; #Literal String beginning with forward slash
+	$nop5ex = '"\/(?!rlbase.basis.pro5).*?"'; #Absolute path NOT beginning with /rlbase/basis/pro5
 }
