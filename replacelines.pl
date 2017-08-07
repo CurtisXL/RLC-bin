@@ -113,9 +113,10 @@ sub do_replaces {
 	$text = $_[0];
 	#do_rl_open();	#Replace OPEN () with RL.Open()
 	#do_rl_path();	#Insert RL.Path()
-	do_rl_path_call();	#Insert RL.Path() in CALL statements
+	#do_rl_path_call();	#Insert RL.Path() in CALL statements
 	#do_rl_path_run();	#Insert RL.Path() in RUN statements
 	#do_rl_rename();	#Replcase RENAME with RL.Rename()
+	do_scall();			#Replace SCALL() with CALL "CDS180"
 	return $text;
 }
 
@@ -197,6 +198,31 @@ sub do_rl_rename {
 	$unreplaced += $text =~ /[:;]\s*RENAME\s+/g;
 }
 
+#Replace SCALL() with CALL "CDS180"
+#Updates: $text - text to search and replace
+#		  $replacements - number of replacements made
+sub do_scall {
+    #Replace  SCALL("! cmd" with  SCALL("cmd"
+	$replacements += $text =~  s/"!\s(mv|ls) /"$1 /g;
+	#Replace  lineno VAR=SCALL(stringexp)  with  lineno CALL "CDS180",stringexp,"ND",VAR
+	$replacements += $text =~  s/(^[0-9]+)\s+(\w*)=SCALL\(($scallex)\)/$1 CALL "CDS180",$3,"ND",$2/g;
+	#Replace  LET VAR=SCALL(stringexp)  with  CALL "CDS180",stringexp,"ND",VAR
+	$replacements += $text =~  s/\s+LET\s+(\w*)=SCALL\(($scallex)\)/ CALL "CDS180",$2,"ND",$1/g;
+	#Replace  LET VAR=SCALL(stringexp,ERR=linelabel)  with  CALL "CDS180",ERR=linelabel,stringexp,"ND",VAR
+	$replacements += $text =~  s/\s+LET\s+(\w*)=SCALL\(($scallex),ERR=(\w*)\)/ CALL "CDS180",ERR=$3,$2,"ND",$1/g;
+	#Replace  ,VAR=SCALL(stringexp)  with  ;CALL "CDS180",stringexp,"ND",VAR
+	$replacements += $text =~  s/,\s*(\w*)=SCALL\(($scallex)\)\s*$/; CALL "CDS180",$2,"ND",$1/g;
+	#Replace  ,VAR=SCALL(stringexp);  with  ;CALL "CDS180",stringexp,"ND",VAR;
+	$replacements += $text =~  s/,\s*(\w*)=SCALL\(($scallex)\)\s*;/; CALL "CDS180",$2,"ND",$1;/g;
+	#Replace  ,VAR=SCALL(stringexp),  with  ;CALL "CDS180",stringexp,"ND",VAR; LET 
+	$replacements += $text =~  s/,\s*(\w*)=SCALL\(($scallex)\)\s*,/; CALL "CDS180",$2,"ND",$1; LET /g;
+	#Replace  ;VAR=SCALL(stringexp)  with  ;CALL "CDS180",stringexp,"ND",VAR
+	$replacements += $text =~  s/;\s*(\w*)=SCALL\(($scallex)\)/; CALL "CDS180",$2,"ND",$1/g;
+	#Replace  IF VAR=SCALL(stringexp)  with  CALL "CDS180",stringexp,"ND",VAR
+	$replacements += $text =~  s/\s+IF\s+SCALL\(($scallex)\)/ LET SCALL_RESULT=CALL "CDS180",$2,"ND",$1; IF SCALL_RESULT /g;
+	push @unreplaced, $text =~ /(SCALL\([^\)]*\))/g;
+}
+
 #Set Global Variables used in Replacement Regular Expressions
 sub set_regex_globals {
 	#Verbs that Manipulate Files for RL.Path() Replacement
@@ -222,4 +248,14 @@ sub set_regex_globals {
 	#Regular Expression for absolute path filespec after CALL
 	$callex = '"\/.*?"'; #Literal String beginning with forward slash
 	$nop5ex = '"\/(?!rlbase.basis.pro5).*?"'; #Absolute path NOT beginning with /rlbase/basis/pro5
+	#Regular Expression for SCALL arguments
+	$scallex = '".*?"'; #"string"
+	$scallex .= '|".*?"\+[\w\.]*\$'; #"string"+var$
+	$scallex .= '|".*?"\+[\w\.]*\$\+[\w\.]*\$'; #"string"+var$+var$
+	$scallex .= '|".*?"\+[\w\.]*\$\+".*?"\+[\w\.]*\$\+".*?"'; #"string"+var$+"string"+var$+string$
+	#$scallex .= '|".*?"\+\w+\([^\)\(]+\)'; #"string"+fnc() - Catches all expressions containing a function - Use with Caution
+	$scallex .= '|[\w\.]*\$'; #var$
+	$scallex .= '|[\w\.]*\$\+[\w\.]*\$'; #var$+var$
+	$scallex .= '|[\w\.]*\$\(.*?\)'; #var$(expr)
+
 }
