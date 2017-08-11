@@ -2,17 +2,24 @@
 
 #Compile RLC BBx/BBj Programs
 
-while getopts ":jlv" opt; do
+while getopts ":jlrv" opt; do
   case $opt in
 	j)	USEBBJ=-j
 		;;
     l)	DOLIST=-l 
 		;;
-    v)	VERBOSE=-v 
+    r)	RECURSED=-r 
+		;;
+	v)	VERBOSE=-v 
 		;;
     \?)
-      echo "Invalid option: -$OPTARG" >&2
-	  exit 1
+      echo "RLC Program Conversion Utility"
+	  echo "Usage: $0 [options] [FILESPEC]"
+	  echo "Options: j  Compile to (or list from) BBj"
+	  echo "         l  List compiled programs"
+	  echo "         v  Verbose Mode"
+	  echo ""
+	  exit 0
       ;;
   esac
 done
@@ -23,7 +30,7 @@ CVTACT="Compiling"
 CVTBAS=/u/basis/pro5
 CVTDIR=BBX
 CVTLST=pro5lst
-CVTOPT='-k'
+CVTOPT='-m1024'
 CVTPGM=pro5cpl
 CVTTYP="Pro5"
 
@@ -46,26 +53,35 @@ if [[ $DOLIST ]]; then
 fi
 
 CVTERR=out/errs/$CVTPGM.err
+CVTERS=${CVTERR}s
 
-function process_file {
-	PRCFIL=$1
-	[[ $VERBOSE ]] && echo "$CVTACT $CVTTYP file $PRCFIL"
-	$CVTBAS/$CVTPGM -d$CVTDIR -e$CVTERR $CVTOPT $PRCFIL
+if  [[ ! $RECURSED ]]; then
+	rm -f $CVTERS
+fi
+
+function process_files {
+	PRCLST="$1"
+	[[ $VERBOSE ]] && echo "Converting File(s) $PRCLST"
+	$CVTBAS/$CVTPGM -d$CVTDIR -e$CVTERR $CVTOPT $PRCLST
+	cat $CVTERR >> $CVTERS
 }
 
 function process_dir {
 	PRCDIR=$1
-	[[ $VERBOSE ]] && echo "Processing directory $PRCDIR"
+	[[ $VERBOSE ]] && echo "Reading directory $PRCDIR"
+	FILLST=""; #List of files in the directory
 	for FILNAM in $(ls $1); do
 		if [[ ${FILNAM:0:1} != '.' ]]; then
 			FILSPC=$PRCDIR/$FILNAM
 			if [[ -d $FILSPC ]]; then
-				$0 $USEBBJ $DOLIST $VERBOSE "$FILSPC"
+				$0 $USEBBJ $DOLIST -r $VERBOSE "$FILSPC"
 			else
-				process_file $FILSPC
+				FILLST="$FILLST $FILSPC"
 			fi
 		fi
 	done
+	[[ $FILLST ]] && process_files "$FILLST"
+
 }
 
 if [[ "$1" == "" ]]; then
@@ -81,7 +97,7 @@ else
 	if [[ -d $1 ]]; then
 		process_dir "$1"
 	else
-		process_file "$1"
+		process_files "$1"
 	fi
 fi
 
