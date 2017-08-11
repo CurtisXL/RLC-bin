@@ -44,8 +44,10 @@ foreach (@subdirs) {
 	search_directory($searchdir);
 }
 if ($show_counts) {
-	print "Number of lines searched: $line_count\n";
-	print "Total REM statements found: $rem_count\n*$/n";
+	print "Total lines read: $lines_read\n";
+	print "Total REMarks found: $rem_count\n";
+	print "Totsl lines searched: $lines_searched\n";
+	print "\n";
 }
 print "Total matches against '$regex' ";
 print "excluding '$exclude_regex' " if $exclude_regex;
@@ -81,7 +83,7 @@ sub search_file {
 	open my $file, $filename || die "Error opening file '$filename'\n";
 	while (my $line = readline $file) {
 		$line =~ s/\r*\n*$//; #Strip CR and/or LF from line
-		$line_count += 1;
+		$lines_read += 1;
 		my @line_results = search_line($line);
 		push @results, @line_results;
 	}
@@ -108,6 +110,7 @@ sub search_line {
 		return @results;
 	}
 	#Isolate trailing REM from Line
+	$lines_searched += 1;
 	if ($line =~ /(.*?)([;:]\s*REM\s+.*$)/i) {
 		die "Bad REM split on line $line\n" if ("$1$2" ne $line);
 		my $quotes = $1 =~ tr/\"//;	#Count number of Quotes in Code part of Line
