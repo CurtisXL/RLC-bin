@@ -31,7 +31,9 @@ foreach (@subdirs) {
 	$searchdir = "$rlcdir/$_";
 	search_directory($searchdir);
 }
-print "Total Matches Against '$verb' = $total_statements\n";
+print "Total matches against '$verb' ";
+print "with argument(s) '$args' " if $args;
+print "= $total_statements\n";
 
 #Search Directory
 #Parameters: Directory to Search
