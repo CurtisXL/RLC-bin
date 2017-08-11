@@ -2,11 +2,13 @@
 
 #Master Search and Replace Utility for RLC BBx and VPro5 code
 
+use File::Basename;
 use Getopt::Std;	#Perl GetOpts Package
 
 #Get Command Line Options
-getopts("u", \%opts) || die ;
+getopts("uw:", \%opts) || die ;
 $unreplaced_only = defined $opts{u};
+$write_dir = $opts{w}; #Directory to write updated programs to
 
 #TEST VERSION: 
 #Does not change any copde
@@ -59,12 +61,18 @@ sub search_file {
 	$filename = $_[0];
 	$use_RL = 
 	my @results;
+	undef @prog_lines;
 	#print "Searching file '$filename'\n";
 	open my $file, $filename || die "Error opening file '$filename'\n";
 	while (my $line = readline $file) {
 		$line =~ s/\r*\n*$//; #Strip CR and/or LF from line
 		my @line_results = search_line($line);
 		push @results, @line_results;
+		if (@line_results) {
+			push @prog_lines, $replaced_line;
+		} else {
+			push @prog_lines, $line;
+		}
 	}
 	close $file;
 	if (@results) {
@@ -73,6 +81,7 @@ sub search_file {
 			print "\t$_\n";
 		}
 		print "\n";
+		write_file() if $write_dir;
 	}
 }
 
@@ -111,14 +120,28 @@ sub search_line {
 #Returns: text after search and replace
 sub do_replaces {
 	$text = $_[0];
+	#do_bbj_fixes();	#Fix bbjcpl Syntax Errors
 	#do_rl_open();	#Replace OPEN () with RL.Open()
 	#do_rl_path();	#Insert RL.Path()
+	do_rlbase_u();	#Replace /rlbase and /u
 	#do_rl_path_call();	#Insert RL.Path() in CALL statements
 	#do_rl_path_run();	#Insert RL.Path() in RUN statements
 	#do_rl_rename();	#Replcase RENAME with RL.Rename()
-	do_scall();			#Replace SCALL() with CALL "CDS180"
+	#do_scall();			#Replace SCALL() with CALL "CDS180"
 	return $text;
 }
+
+#Fix lines that create errors in bbjcpl
+#Updates: $text - text to search and replace
+#		  $replacements - number of replacements made
+sub do_bbj_fixes {
+	#Change  THEN var=  with  THEN LET var=
+	#Change  THEN var$=  with  THEN LET var$=
+	#Change  ELSE var=  with  ELSE LET var=
+	#Change  ELSE var$=  with  ELSE LET var$=
+	$replacements += $text =~  s/\s(THEN|ELSE)\s+(\w*\$?)=/ $1 LET $2=/g;
+}
+
 
 #Replace OPEN Verb with Call to Static Methoc RL.Open()
 #Updates: $text - text to search and replace
@@ -152,14 +175,30 @@ sub do_rl_path {
 	$unreplaced +- $text =~ /[:;]\s*($file_verbs)\s/g;
 }
 
+#Replace absolute path references to /rlbase and /u
+#Updates: $text - text to search and replace
+#		  $replacements - number of replacements made
+sub do_rlbase_u {
+	#Replace  "/rlbase/basis/pro5/"  with  STBL("PRO5DIR")+"
+	$replacements += $text =~  s/$pro5ex/STBL\("PRO5DIR"\)\+"/g;
+	#Replace  "/rlbase/CDI/"  with  STBL("SMSDIR")+"
+	#Replace  "/u/CDI/"  with  STBL("SMSDIR")+"/
+	$replacements += $text =~  s/$smsex/STBL\("SMSDIR"\)\+"/g;
+}
+
 #Insert RL.Path in appropriate CALL Statements
 #Updates: $text - text to search and replace
 #		  $replacements - number of replacements made
 sub do_rl_path_call {
 	#Replace  CALL "abspath"  with  CALL RL.Path("abspath")
-	$replacements += $text =~  s/\s(CALL)\s+($nop5ex)/ $1 RL\.Path\($2\)/g;
+	###$replacements += $text =~  s/\s(CALL)\s+($nop5ex)/ $1 RL\.Path\($2\)/g;
+	#Replace  CALL "/rlbase/basis/pro5/"  with  CALL STBL("PRO5DIR")+"
+	$replacements += $text =~  s/\s(CALL)\s+($pro5ex)/ $1 SCALL\("PRO5DIR"\)\+"/g;
+	#Replace  CALL "/rlbase/CDI/"  with  CALL STBL("SMSDIR")+"
+	#Replace  CALL "/u/CDI/"  with  CALL STBL("SMSDIR")+"/
+	$replacements += $text =~  s/\s(CALL)\s+($smsex)/ $1 SCALL\("SMSDIR"\)\+"/g;
 	#Replace  CALL MCH$+"abspath" with  CALL RL.Path("abspath")
-	$replacements += $text =~  s/\s(CALL)\s+MCH\$\+($callex)/ $1 RL\.Path\($2\)/g;
+	###$replacements += $text =~  s/\s(CALL)\s+MCH\$\+($callex)/ $1 RL\.Path\($2\)/g;
 	#Find unchanged CALL "abspath" statements
 	push @unreplaced, $text =~  /\s(CALL\s+$callex)/gi;
 }
@@ -247,7 +286,12 @@ sub set_regex_globals {
 	$runex = '"\/[^; ]*'; #Literal String beginning with forward slash plus any non-semicolon
 	#Regular Expression for absolute path filespec after CALL
 	$callex = '"\/.*?"'; #Literal String beginning with forward slash
-	$nop5ex = '"\/(?!rlbase.basis.pro5).*?"'; #Absolute path NOT beginning with /rlbase/basis/pro5
+	#Regular Expression for absolute path NOT beginning with /rlbase/basis/pro5
+	$nop5ex = '"\/(?!rlbase.basis.pro5).*?"'; 
+	#Regular Expression for absolute path beginning with /rlbase/basis/pro5/
+	$pro5ex = '"\/rlbase\/basis\/pro5\/'; 
+	#Regular Expression for absolute path beginning with /*/CDI
+	$smsex = '"\/\w+\/CDI\/'; 
 	#Regular Expression for SCALL arguments
 	$scallex = '".*?"'; #"string"
 	$scallex .= '|".*?"\+[\w\.]*\$'; #"string"+var$
@@ -258,4 +302,18 @@ sub set_regex_globals {
 	$scallex .= '|[\w\.]*\$\+[\w\.]*\$'; #var$+var$
 	$scallex .= '|[\w\.]*\$\(.*?\)'; #var$(expr)
 
+}
+
+#Write out changed file
+sub write_file {
+	print "filename=$filename\n" if $debug;
+	my $outname = fileparse($filename);
+	print "outname=$outname\n" if $debug;
+	my $outspec = $write_dir . '/' . $outname;
+	print "outspec=$outspec\n" if $debug;
+	open(my $of, '>', $outspec) or die "Could not open file '$outname' $!";
+	foreach (@prog_lines) {
+		print $of "$_\n";
+	}
+	close $of;
 }
