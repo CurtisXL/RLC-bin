@@ -120,28 +120,15 @@ sub search_line {
 #Returns: text after search and replace
 sub do_replaces {
 	$text = $_[0];
-	#do_bbj_fixes();	#Fix bbjcpl Syntax Errors
-	#do_rl_open();	#Replace OPEN () with RL.Open()
-	#do_rl_path();	#Insert RL.Path()
+	do_rl_open();	#Replace OPEN () with RL.Open()
+	do_rl_path();	#Insert RL.Path()
 	do_rlbase_u();	#Replace /rlbase and /u
-	#do_rl_path_call();	#Insert RL.Path() in CALL statements
-	#do_rl_path_run();	#Insert RL.Path() in RUN statements
-	#do_rl_rename();	#Replcase RENAME with RL.Rename()
-	#do_scall();			#Replace SCALL() with CALL "CDS180"
+	do_rl_path_call();	#Insert RL.Path() in CALL statements
+	do_rl_path_run();	#Insert RL.Path() in RUN statements
+	do_rl_rename();	#Replcase RENAME with RL.Rename()
+	do_scall();			#Replace SCALL() with CALL "CDS180"
 	return $text;
 }
-
-#Fix lines that create errors in bbjcpl
-#Updates: $text - text to search and replace
-#		  $replacements - number of replacements made
-sub do_bbj_fixes {
-	#Change  THEN var=  with  THEN LET var=
-	#Change  THEN var$=  with  THEN LET var$=
-	#Change  ELSE var=  with  ELSE LET var=
-	#Change  ELSE var$=  with  ELSE LET var$=
-	$replacements += $text =~  s/\s(THEN|ELSE)\s+(\w*\$?)=/ $1 LET $2=/g;
-}
-
 
 #Replace OPEN Verb with Call to Static Methoc RL.Open()
 #Updates: $text - text to search and replace
