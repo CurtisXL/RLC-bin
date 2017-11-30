@@ -5,8 +5,10 @@
 use Getopt::Std;	#Perl GetOpts Package
 
 #Get Command Line Options
-getopts("cmp:svx:", \%opts) || die ;
+getopts("cf:lmp:svx:", \%opts) || die ;
 $show_counts = defined $opts{c};
+$sub_file = $opts{f};
+$legacy_only = defined $opts{l};
 $matched_text = defined $opts{m};
 $string_vars = defined $opts{s};
 $verbs_only = defined $opts{v};
@@ -24,20 +26,49 @@ if (scalar @ARGV != 1) {
 	print "Searches specific directories and ignores contents of REM statements\n";
 	print "Usage: $0 [OPTION] REGEX\n";
 	print "Options: -c  display additional counts\n";
+	print "         -f FILE  substitute each line of FILE for % in regex\n";
+	print "         -l  search legacy directory only\n";
 	print "         -m  output matched text only\n";
-	print "         -p REGEX   only programs with line(s) matching regular expression\n";
+	print "         -p REGEX  only programs with line(s) matching regular expression\n";
 	#print "         -s  include string variable assignments\n";
 	print "         -v  search for verbs only\n";
-	print "         -x REGEX   exclude lines matching regular expression\n";
+	print "         -x REGEX  exclude lines matching regular expression\n";
 	exit;
 }
 
+#Read Substitution File
+if ($sub_file) {
+	open my $file, $sub_file || die "Error opening substitution file '$sub_file'\n";
+	while (my $line = readline $file) {
+		$line =~ s/\r*\n*$//; #Strip CR and/or LF from line
+		push @sub_lines, $line;
+	}
+	close $file;
+}
+
 #Set Search Directories
-$rlcdir = 'RLC';	#Base Directory for Source Code Files
-@subdirs = ('Legacy', 'VPro5');	#Subdirectories to search in
+$defdir = 'RLC';	#Base Directory for Source Code Files
+if ( -e $defdir && -d $defdir ) {
+	$rlcdir = $defdir;
+} else {
+	$rlcdir = '.';
+}
+
+#Set subdirectories to search in
+if ($legacy_only) {
+	@subdirs = ('Legacy');	
+}else {
+	@subdirs = ('Legacy', 'VPro5');	#Subdirectories to search in
+}
 
 #Set Regular Expression to Search For
 $regex = $ARGV[0]; 
+if (@sub_lines) {
+	my $i = index($regex, '%');
+	die "No % character found in Regular Expression\n" if $i < 0;
+	$regpfx = substr($regex, 0, $i);
+	$regsfx = substr($regex, $i+1);
+}
 
 foreach (@subdirs) {
 	$searchdir = "$rlcdir/$_";
@@ -50,6 +81,7 @@ if ($show_counts) {
 	print "\n";
 }
 print "Total matches against '$regex' ";
+print "substituting from file '$sub_file' " if @sub_lines;
 print "excluding '$exclude_regex' " if $exclude_regex;
 print "= $total_matches\n";
 
@@ -138,6 +170,25 @@ sub search_line {
 #Parameter: text to search
 #Returns: array containing search results
 sub do_searches {
+	my $text = $_[0];
+	my $match_count;
+	if (@sub_lines) {
+		foreach (@sub_lines) {
+			$regex = $regpfx . $_ . $regsfx;
+			#print "Searching for $regex\n";
+			$match_count += do_regex($text)
+		}
+	} else {
+		$match_count = do_regex($text);
+	}
+	return $match_count ? $text : 0;
+}
+
+
+#Search against specified regex
+#Parameter: text to search
+#Returns: array containing search results
+sub do_regex {
 	my $text = $_[0];
 	my $match_count;
 	return 0 if $exclude_regex && $text =~ /$exclude_regex/;
