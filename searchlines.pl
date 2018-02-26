@@ -5,8 +5,10 @@
 use Getopt::Std;	#Perl GetOpts Package
 
 #Get Command Line Options
-getopts("cf:lmp:svx:", \%opts) || die ;
+getopts("cdef:lmp:svx:", \%opts) || die ;
 $show_counts = defined $opts{c};
+$debug = defined $opts{d};
+$esc_lines = defined $opts{e};
 $sub_file = $opts{f};
 $legacy_only = defined $opts{l};
 $matched_text = defined $opts{m};
@@ -26,6 +28,7 @@ if (scalar @ARGV != 1) {
 	print "Searches specific directories and ignores contents of REM statements\n";
 	print "Usage: $0 [OPTION] REGEX\n";
 	print "Options: -c  display additional counts\n";
+	print "         -e  escape all special characters read from file (-f option)\n";
 	print "         -f FILE  substitute each line of FILE for % in regex\n";
 	print "         -l  search legacy directory only\n";
 	print "         -m  output matched text only\n";
@@ -41,6 +44,7 @@ if ($sub_file) {
 	open my $file, $sub_file || die "Error opening substitution file '$sub_file'\n";
 	while (my $line = readline $file) {
 		$line =~ s/\r*\n*$//; #Strip CR and/or LF from line
+		$line = quotemeta($line) if $esc_lines;
 		push @sub_lines, $line;
 	}
 	close $file;
@@ -58,7 +62,7 @@ if ( -e $defdir && -d $defdir ) {
 if ($legacy_only) {
 	@subdirs = ('Legacy');	
 }else {
-	@subdirs = ('Legacy', 'VPro5');	#Subdirectories to search in
+	@subdirs = ('BBj', 'Legacy', 'VPro5');	#Subdirectories to search in
 }
 
 #Set Regular Expression to Search For
@@ -84,6 +88,13 @@ print "Total matches against '$regex' ";
 print "substituting from file '$sub_file' " if @sub_lines;
 print "excluding '$exclude_regex' " if $exclude_regex;
 print "= $total_matches\n";
+
+if (@sub_lines) {
+	print "\nMatch Detail:\n";
+	while (($prt_line, $prt_count) = each (%sub_count)) {
+		print "$prt_line\t$prt_count\n";
+	}
+}
 
 #Search Directory
 #Parameters: Directory to Search
@@ -175,8 +186,9 @@ sub do_searches {
 	if (@sub_lines) {
 		foreach (@sub_lines) {
 			$regex = $regpfx . $_ . $regsfx;
-			#print "Searching for $regex\n";
-			$match_count += do_regex($text)
+			$do_count = do_regex($text);
+			$sub_count{$_} += $do_count if $do_count;
+			$match_count += $do_count
 		}
 	} else {
 		$match_count = do_regex($text);
